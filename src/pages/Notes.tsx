@@ -8,30 +8,20 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { notesService, Note, CreateNoteInput } from "@/services/notes";
 import { toast } from "sonner";
 import { Plus, Search, StickyNote, Download, FileText } from "lucide-react";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
 
-interface Note {
-  id: string;
-  title: string;
-  content: string | null;
-  note_type: string | null;
-  created_at: string;
-}
-
 export default function Notes() {
-  const { user } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
-  const [newNote, setNewNote] = useState({
+  const [newNote, setNewNote] = useState<CreateNoteInput>({
     title: "",
     content: "",
     note_type: "general",
@@ -42,17 +32,14 @@ export default function Notes() {
   }, []);
 
   const fetchNotes = async () => {
-    const { data, error } = await supabase
-      .from("notes")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
+    try {
+      const data = await notesService.getAll();
+      setNotes(data);
+    } catch (error) {
       toast.error("Failed to load notes");
-    } else {
-      setNotes(data || []);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleCreateNote = async () => {
@@ -61,14 +48,8 @@ export default function Notes() {
       return;
     }
 
-    const { error } = await supabase.from("notes").insert({
-      ...newNote,
-      created_by: user?.id,
-    });
-
-    if (error) {
-      toast.error("Failed to create note");
-    } else {
+    try {
+      await notesService.create(newNote);
       toast.success("Note created successfully");
       setIsCreateOpen(false);
       setNewNote({
@@ -77,6 +58,8 @@ export default function Notes() {
         note_type: "general",
       });
       fetchNotes();
+    } catch (error) {
+      toast.error("Failed to create note");
     }
   };
 

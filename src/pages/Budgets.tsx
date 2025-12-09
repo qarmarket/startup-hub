@@ -7,33 +7,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { budgetsService, Budget, CreateBudgetInput } from "@/services/budgets";
 import { toast } from "sonner";
-import { Plus, Search, Wallet, Calendar, DollarSign, Download, Upload } from "lucide-react";
+import { Plus, Search, Wallet, Calendar, DollarSign, Download } from "lucide-react";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
 
-interface Budget {
-  id: string;
-  name: string;
-  period_type: string;
-  start_date: string | null;
-  end_date: string | null;
-  total_budget_amount: number;
-  currency: string;
-  status: string;
-  created_at: string;
-}
-
 export default function Budgets() {
-  const { user, isLead } = useAuth();
+  const { isLead } = useAuth();
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [newBudget, setNewBudget] = useState({
+  const [newBudget, setNewBudget] = useState<CreateBudgetInput>({
     name: "",
     period_type: "month",
     total_budget_amount: 0,
@@ -46,17 +34,14 @@ export default function Budgets() {
   }, []);
 
   const fetchBudgets = async () => {
-    const { data, error } = await supabase
-      .from("budgets")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
+    try {
+      const data = await budgetsService.getAll();
+      setBudgets(data);
+    } catch (error) {
       toast.error("Failed to load budgets");
-    } else {
-      setBudgets(data || []);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleCreateBudget = async () => {
@@ -65,14 +50,8 @@ export default function Budgets() {
       return;
     }
 
-    const { error } = await supabase.from("budgets").insert({
-      ...newBudget,
-      created_by: user?.id,
-    });
-
-    if (error) {
-      toast.error("Failed to create budget");
-    } else {
+    try {
+      await budgetsService.create(newBudget);
       toast.success("Budget created successfully");
       setIsCreateOpen(false);
       setNewBudget({
@@ -83,6 +62,8 @@ export default function Budgets() {
         status: "draft",
       });
       fetchBudgets();
+    } catch (error) {
+      toast.error("Failed to create budget");
     }
   };
 

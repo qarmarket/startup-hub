@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -8,32 +8,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { tasksService, Task, CreateTaskInput } from "@/services/tasks";
+import { profilesService, Profile } from "@/services/profiles";
 import { toast } from "sonner";
 import { Plus, Search, CheckSquare, Download, Calendar, User } from "lucide-react";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
 
-interface Task {
-  id: string;
-  title: string;
-  description: string | null;
-  status: string;
-  priority: string;
-  due_date: string | null;
-  assignee_user_id: string | null;
-  created_at: string;
-}
-
-interface Profile {
-  id: string;
-  email: string;
-  full_name: string | null;
-}
-
 export default function Tasks() {
-  const { user, isLead } = useAuth();
+  const { isLead } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +25,7 @@ export default function Tasks() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [newTask, setNewTask] = useState({
+  const [newTask, setNewTask] = useState<CreateTaskInput>({
     title: "",
     description: "",
     status: "backlog",
@@ -56,22 +40,23 @@ export default function Tasks() {
   }, []);
 
   const fetchTasks = async () => {
-    const { data, error } = await supabase
-      .from("tasks")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
+    try {
+      const data = await tasksService.getAll();
+      setTasks(data);
+    } catch (error) {
       toast.error("Failed to load tasks");
-    } else {
-      setTasks(data || []);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const fetchProfiles = async () => {
-    const { data } = await supabase.from("profiles").select("id, email, full_name");
-    setProfiles(data || []);
+    try {
+      const data = await profilesService.getAll();
+      setProfiles(data);
+    } catch (error) {
+      console.error("Failed to load profiles");
+    }
   };
 
   const handleCreateTask = async () => {
@@ -80,16 +65,12 @@ export default function Tasks() {
       return;
     }
 
-    const { error } = await supabase.from("tasks").insert({
-      ...newTask,
-      due_date: newTask.due_date || null,
-      assignee_user_id: newTask.assignee_user_id || null,
-      created_by: user?.id,
-    });
-
-    if (error) {
-      toast.error("Failed to create task");
-    } else {
+    try {
+      await tasksService.create({
+        ...newTask,
+        due_date: newTask.due_date || null,
+        assignee_user_id: newTask.assignee_user_id || null,
+      });
       toast.success("Task created successfully");
       setIsCreateOpen(false);
       setNewTask({
@@ -101,17 +82,18 @@ export default function Tasks() {
         assignee_user_id: "",
       });
       fetchTasks();
+    } catch (error) {
+      toast.error("Failed to create task");
     }
   };
 
   const handleStatusChange = async (id: string, newStatus: string) => {
-    const { error } = await supabase.from("tasks").update({ status: newStatus }).eq("id", id);
-
-    if (error) {
-      toast.error("Failed to update status");
-    } else {
+    try {
+      await tasksService.update(id, { status: newStatus });
       toast.success("Status updated");
       fetchTasks();
+    } catch (error) {
+      toast.error("Failed to update status");
     }
   };
 
@@ -236,7 +218,7 @@ export default function Tasks() {
                     <Label>Due Date</Label>
                     <Input
                       type="date"
-                      value={newTask.due_date}
+                      value={newTask.due_date || ""}
                       onChange={(e) => setNewTask({ ...newTask, due_date: e.target.value })}
                     />
                   </div>
@@ -244,7 +226,7 @@ export default function Tasks() {
                     <div className="space-y-2">
                       <Label>Assignee</Label>
                       <Select
-                        value={newTask.assignee_user_id}
+                        value={newTask.assignee_user_id || ""}
                         onValueChange={(v) => setNewTask({ ...newTask, assignee_user_id: v })}
                       >
                         <SelectTrigger>

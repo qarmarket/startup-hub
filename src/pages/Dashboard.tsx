@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { dashboardService, DashboardStats } from "@/services/dashboard";
+import { Task } from "@/services/tasks";
 import {
   Wallet,
   FileText,
@@ -14,17 +15,6 @@ import {
   AlertCircle,
   Users,
 } from "lucide-react";
-
-interface DashboardStats {
-  totalBudgets: number;
-  activeBudgets: number;
-  totalInvoices: number;
-  unpaidInvoices: number;
-  totalTasks: number;
-  pendingTasks: number;
-  totalNotes: number;
-  teamMembers: number;
-}
 
 export default function Dashboard() {
   const { user, isLead } = useAuth();
@@ -38,7 +28,7 @@ export default function Dashboard() {
     totalNotes: 0,
     teamMembers: 0,
   });
-  const [recentTasks, setRecentTasks] = useState<any[]>([]);
+  const [recentTasks, setRecentTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,38 +36,9 @@ export default function Dashboard() {
       if (!user) return;
 
       try {
-        const [
-          budgetsRes,
-          invoicesRes,
-          tasksRes,
-          notesRes,
-          profilesRes,
-          recentTasksRes,
-        ] = await Promise.all([
-          supabase.from("budgets").select("status"),
-          supabase.from("invoices").select("status"),
-          supabase.from("tasks").select("status"),
-          supabase.from("notes").select("id"),
-          supabase.from("profiles").select("id"),
-          supabase
-            .from("tasks")
-            .select("*")
-            .order("created_at", { ascending: false })
-            .limit(5),
-        ]);
-
-        setStats({
-          totalBudgets: budgetsRes.data?.length || 0,
-          activeBudgets: budgetsRes.data?.filter((b) => b.status === "active").length || 0,
-          totalInvoices: invoicesRes.data?.length || 0,
-          unpaidInvoices: invoicesRes.data?.filter((i) => i.status === "unpaid").length || 0,
-          totalTasks: tasksRes.data?.length || 0,
-          pendingTasks: tasksRes.data?.filter((t) => t.status !== "done").length || 0,
-          totalNotes: notesRes.data?.length || 0,
-          teamMembers: profilesRes.data?.length || 0,
-        });
-
-        setRecentTasks(recentTasksRes.data || []);
+        const data = await dashboardService.getStats();
+        setStats(data.stats);
+        setRecentTasks(data.recentTasks);
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
       } finally {
