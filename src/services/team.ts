@@ -9,10 +9,31 @@ export interface TeamMember {
   role?: string;
 }
 
+export interface CreateUserInput {
+  email: string;
+  password: string;
+  full_name: string;
+  role: "lead" | "non_lead";
+}
+
 export const teamService = {
   async getAll(): Promise<TeamMember[]> {
     const response = await apiRequest<{ data: TeamMember[] }>("api-team");
     return response.data;
+  },
+
+  async createUser(input: CreateUserInput): Promise<void> {
+    await apiRequest("api-team", {
+      method: "POST",
+      body: input as unknown as Record<string, unknown>,
+    });
+  },
+
+  async deleteUser(userId: string): Promise<void> {
+    await apiRequest("api-team", {
+      method: "DELETE",
+      params: { userId },
+    });
   },
 
   async updateRole(userId: string, role: "lead" | "non_lead"): Promise<void> {

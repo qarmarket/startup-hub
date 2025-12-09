@@ -183,19 +183,18 @@ export default function Budgets() {
                     </div>
                     <div className="space-y-2">
                       <Label>Currency</Label>
-                      <Select
+                      <Input
+                        placeholder="USD, QAR, EUR..."
                         value={newBudget.currency}
-                        onValueChange={(v) => setNewBudget({ ...newBudget, currency: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="USD">USD</SelectItem>
-                          <SelectItem value="EUR">EUR</SelectItem>
-                          <SelectItem value="GBP">GBP</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        onChange={(e) => setNewBudget({ ...newBudget, currency: e.target.value.toUpperCase() })}
+                        list="currency-list"
+                      />
+                      <datalist id="currency-list">
+                        <option value="USD">US Dollar</option>
+                        <option value="QAR">Qatari Riyal</option>
+                        <option value="EUR">Euro</option>
+                        <option value="GBP">British Pound</option>
+                      </datalist>
                     </div>
                   </div>
                   <Button onClick={handleCreateBudget} className="w-full">
