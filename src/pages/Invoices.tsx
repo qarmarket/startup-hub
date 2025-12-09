@@ -8,34 +8,21 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { invoicesService, Invoice, CreateInvoiceInput } from "@/services/invoices";
 import { toast } from "sonner";
-import { Plus, Search, FileText, Download, Calendar, DollarSign } from "lucide-react";
+import { Plus, Search, FileText, Download } from "lucide-react";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
 
-interface Invoice {
-  id: string;
-  vendor_name: string | null;
-  client_name: string | null;
-  invoice_number: string | null;
-  issue_date: string | null;
-  due_date: string | null;
-  amount: number | null;
-  status: string;
-  notes: string | null;
-  created_at: string;
-}
-
 export default function Invoices() {
-  const { user, isLead } = useAuth();
+  const { isLead } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [newInvoice, setNewInvoice] = useState({
+  const [newInvoice, setNewInvoice] = useState<CreateInvoiceInput>({
     vendor_name: "",
     invoice_number: "",
     amount: 0,
@@ -50,17 +37,14 @@ export default function Invoices() {
   }, []);
 
   const fetchInvoices = async () => {
-    const { data, error } = await supabase
-      .from("invoices")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
+    try {
+      const data = await invoicesService.getAll();
+      setInvoices(data);
+    } catch (error) {
       toast.error("Failed to load invoices");
-    } else {
-      setInvoices(data || []);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleCreateInvoice = async () => {
@@ -69,16 +53,12 @@ export default function Invoices() {
       return;
     }
 
-    const { error } = await supabase.from("invoices").insert({
-      ...newInvoice,
-      issue_date: newInvoice.issue_date || null,
-      due_date: newInvoice.due_date || null,
-      created_by: user?.id,
-    });
-
-    if (error) {
-      toast.error("Failed to create invoice");
-    } else {
+    try {
+      await invoicesService.create({
+        ...newInvoice,
+        issue_date: newInvoice.issue_date || null,
+        due_date: newInvoice.due_date || null,
+      });
       toast.success("Invoice created successfully");
       setIsCreateOpen(false);
       setNewInvoice({
@@ -91,17 +71,18 @@ export default function Invoices() {
         notes: "",
       });
       fetchInvoices();
+    } catch (error) {
+      toast.error("Failed to create invoice");
     }
   };
 
   const handleStatusChange = async (id: string, newStatus: string) => {
-    const { error } = await supabase.from("invoices").update({ status: newStatus }).eq("id", id);
-
-    if (error) {
-      toast.error("Failed to update status");
-    } else {
+    try {
+      await invoicesService.update(id, { status: newStatus });
       toast.success("Status updated");
       fetchInvoices();
+    } catch (error) {
+      toast.error("Failed to update status");
     }
   };
 
@@ -219,7 +200,7 @@ export default function Invoices() {
                       <Label>Issue Date</Label>
                       <Input
                         type="date"
-                        value={newInvoice.issue_date}
+                        value={newInvoice.issue_date || ""}
                         onChange={(e) => setNewInvoice({ ...newInvoice, issue_date: e.target.value })}
                       />
                     </div>
@@ -227,7 +208,7 @@ export default function Invoices() {
                       <Label>Due Date</Label>
                       <Input
                         type="date"
-                        value={newInvoice.due_date}
+                        value={newInvoice.due_date || ""}
                         onChange={(e) => setNewInvoice({ ...newInvoice, due_date: e.target.value })}
                       />
                     </div>

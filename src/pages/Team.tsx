@@ -1,90 +1,55 @@
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { teamService, TeamMember } from "@/services/team";
 import { toast } from "sonner";
-import { Plus, Search, Users, Mail, Shield, Download } from "lucide-react";
-import { format } from "date-fns";
+import { Search, Users, Mail, Shield, Download } from "lucide-react";
 import * as XLSX from "xlsx";
-
-interface TeamMember {
-  id: string;
-  email: string;
-  full_name: string | null;
-  status: string | null;
-  created_at: string | null;
-  role?: string;
-}
 
 export default function Team() {
   const { user, isLead } = useAuth();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("non_lead");
 
   useEffect(() => {
     fetchTeamMembers();
   }, []);
 
   const fetchTeamMembers = async () => {
-    const { data: profiles, error: profilesError } = await supabase
-      .from("profiles")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (profilesError) {
+    try {
+      const data = await teamService.getAll();
+      setMembers(data);
+    } catch (error) {
       toast.error("Failed to load team members");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const { data: roles } = await supabase.from("user_roles").select("user_id, role");
-
-    const membersWithRoles = (profiles || []).map((profile) => ({
-      ...profile,
-      role: roles?.find((r) => r.user_id === profile.id)?.role || "non_lead",
-    }));
-
-    setMembers(membersWithRoles);
-    setLoading(false);
   };
 
   const handleRoleChange = async (userId: string, newRole: "lead" | "non_lead") => {
-    const { error } = await supabase
-      .from("user_roles")
-      .update({ role: newRole })
-      .eq("user_id", userId);
-
-    if (error) {
-      toast.error("Failed to update role");
-    } else {
+    try {
+      await teamService.updateRole(userId, newRole);
       toast.success("Role updated successfully");
       fetchTeamMembers();
+    } catch (error) {
+      toast.error("Failed to update role");
     }
   };
 
   const handleStatusChange = async (userId: string, newStatus: string) => {
-    const { error } = await supabase
-      .from("profiles")
-      .update({ status: newStatus })
-      .eq("id", userId);
-
-    if (error) {
-      toast.error("Failed to update status");
-    } else {
+    try {
+      await teamService.updateStatus(userId, newStatus);
       toast.success("Status updated successfully");
       fetchTeamMembers();
+    } catch (error) {
+      toast.error("Failed to update status");
     }
   };
 
