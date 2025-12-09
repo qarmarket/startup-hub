@@ -49,7 +49,6 @@ Deno.serve(async (req) => {
       case "GET": {
         console.log("Fetching team members");
         
-        // Get all profiles
         const { data: profiles, error: profilesError } = await supabase
           .from("profiles")
           .select("*")
@@ -63,7 +62,6 @@ Deno.serve(async (req) => {
           });
         }
 
-        // Get all roles
         const { data: roles } = await supabase.from("user_roles").select("user_id, role");
 
         const membersWithRoles = (profiles || []).map((profile) => ({
@@ -72,6 +70,102 @@ Deno.serve(async (req) => {
         }));
 
         return new Response(JSON.stringify({ data: membersWithRoles }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      case "POST": {
+        if (!isLead) {
+          return new Response(JSON.stringify({ error: "Forbidden: Only admins can create users" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const body = await req.json();
+        const { email, password, full_name, role } = body;
+
+        if (!email || !password) {
+          return new Response(JSON.stringify({ error: "Email and password are required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        console.log("Creating new user:", email);
+
+        // Create user in auth
+        const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: { full_name },
+        });
+
+        if (createError) {
+          console.error("Error creating user:", createError);
+          return new Response(JSON.stringify({ error: createError.message }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Update role if different from default
+        if (role === "lead" && newUser.user) {
+          const { error: roleError } = await supabase
+            .from("user_roles")
+            .update({ role: "lead" })
+            .eq("user_id", newUser.user.id);
+
+          if (roleError) {
+            console.error("Error updating role:", roleError);
+          }
+        }
+
+        console.log("User created successfully:", newUser.user?.id);
+
+        return new Response(JSON.stringify({ data: newUser.user }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      case "DELETE": {
+        if (!isLead) {
+          return new Response(JSON.stringify({ error: "Forbidden: Only admins can delete users" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        if (!userId) {
+          return new Response(JSON.stringify({ error: "User ID required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        if (userId === user.id) {
+          return new Response(JSON.stringify({ error: "Cannot delete yourself" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        console.log("Deleting user:", userId);
+
+        const { error: deleteError } = await supabase.auth.admin.deleteUser(userId);
+
+        if (deleteError) {
+          console.error("Error deleting user:", deleteError);
+          return new Response(JSON.stringify({ error: deleteError.message }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        console.log("User deleted successfully");
+
+        return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }

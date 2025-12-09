@@ -4,12 +4,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { teamService, TeamMember } from "@/services/team";
 import { toast } from "sonner";
-import { Search, Users, Mail, Shield, Download } from "lucide-react";
+import { Search, Users, Mail, Shield, Download, Plus, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
 
 export default function Team() {
@@ -17,6 +19,14 @@ export default function Team() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newUser, setNewUser] = useState({
+    email: "",
+    password: "",
+    full_name: "",
+    role: "non_lead" as "lead" | "non_lead",
+  });
 
   useEffect(() => {
     fetchTeamMembers();
@@ -30,6 +40,44 @@ export default function Team() {
       toast.error("Failed to load team members");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateUser = async () => {
+    if (!newUser.email || !newUser.password) {
+      toast.error("Email and password are required");
+      return;
+    }
+    if (newUser.password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
+    setCreating(true);
+    try {
+      await teamService.createUser(newUser);
+      toast.success("User created successfully. They can change their password after logging in.");
+      setIsCreateOpen(false);
+      setNewUser({ email: "", password: "", full_name: "", role: "non_lead" });
+      fetchTeamMembers();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create user");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, email: string) => {
+    if (!confirm(`Are you sure you want to remove ${email} from the team?`)) {
+      return;
+    }
+
+    try {
+      await teamService.deleteUser(userId);
+      toast.success("User removed successfully");
+      fetchTeamMembers();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to remove user");
     }
   };
 
@@ -100,6 +148,68 @@ export default function Team() {
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Member
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Team Member</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label>Full Name</Label>
+                    <Input
+                      placeholder="John Doe"
+                      value={newUser.full_name}
+                      onChange={(e) => setNewUser({ ...newUser, full_name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email *</Label>
+                    <Input
+                      type="email"
+                      placeholder="john@example.com"
+                      value={newUser.email}
+                      onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Temporary Password *</Label>
+                    <Input
+                      type="password"
+                      placeholder="Min 6 characters"
+                      value={newUser.password}
+                      onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      User can change this after logging in
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Role</Label>
+                    <Select
+                      value={newUser.role}
+                      onValueChange={(v) => setNewUser({ ...newUser, role: v as "lead" | "non_lead" })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="non_lead">Member</SelectItem>
+                        <SelectItem value="lead">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button onClick={handleCreateUser} className="w-full" disabled={creating}>
+                    {creating ? "Creating..." : "Create User"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         )
       }
@@ -178,7 +288,7 @@ export default function Team() {
               <Users className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-1">No team members found</h3>
               <p className="text-sm text-muted-foreground">
-                {searchQuery ? "Try adjusting your search" : "Invite team members to get started"}
+                {searchQuery ? "Try adjusting your search" : "Add team members to get started"}
               </p>
             </CardContent>
           </Card>
@@ -243,6 +353,14 @@ export default function Team() {
                               <SelectItem value="inactive">Inactive</SelectItem>
                             </SelectContent>
                           </Select>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => handleDeleteUser(member.id, member.email)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       )}
                     </div>
