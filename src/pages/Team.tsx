@@ -256,7 +256,7 @@ export default function Team() {
                         <div className="flex items-center gap-2">
                           <Select
                             value={member.role}
-                            onValueChange={(v) => handleRoleChange(member.id, v)}
+                            onValueChange={(v) => handleRoleChange(member.id, v as "lead" | "non_lead")}
                           >
                             <SelectTrigger className="w-[110px] h-8">
                               <SelectValue />
